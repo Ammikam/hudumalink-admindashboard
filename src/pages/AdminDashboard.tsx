@@ -1,61 +1,130 @@
 import { useEffect, useState } from 'react';
-import { useAuth, SignOutButton } from '@clerk/clerk-react';
+import { useAuth } from '@clerk/clerk-react';
 import { adminApi } from '@/api/Admin';
+import { Users, UserCheck, Briefcase, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 
-export default function AdminDashboard() {
-  const { isLoaded, userId, getToken } = useAuth();
+interface Stats {
+  users: {
+    total: number;
+    clients: number;
+    designers: number;
+    pendingDesigners: number;
+    approvedDesigners: number;
+    verifiedDesigners: number;
+    superVerifiedDesigners: number;
+  };
+  projects: {
+    total: number;
+    open: number;
+    inProgress: number;
+    completed: number;
+  };
+}
 
-  const [stats, setStats] = useState<any>(null);
+export default function Dashboard() {
+  const { getToken } = useAuth();
+  const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [forbidden, setForbidden] = useState(false);
 
   useEffect(() => {
-    if (!isLoaded || !userId) return;
-
     const fetchStats = async () => {
       try {
-        // FIXED: Removed { template: 'standard' }
         const token = await getToken();
-        if (!token) {
-          console.error('No token received from Clerk');
-          return;
-        }
-
+        if (!token) return;
         const data = await adminApi.getStats(token);
-        setStats(data);
-      } catch (err: any) {
-        console.error('Error fetching stats:', err);
-        if (err?.response?.status === 403) {
-          setForbidden(true);
-        }
+        setStats(data.stats);
+      } catch (err) {
+        console.error('Failed to load stats', err);
       } finally {
         setLoading(false);
       }
     };
 
     fetchStats();
-  }, [isLoaded, userId, getToken]);
+  }, [getToken]);
+
+  const statCards = [
+    { label: 'Total Users', value: stats?.users.total ?? 0, icon: Users, color: 'bg-blue-500' },
+    { label: 'Clients', value: stats?.users.clients ?? 0, icon: Users, color: 'bg-green-500' },
+    { label: 'Total Designers', value: stats?.users.designers ?? 0, icon: UserCheck, color: 'bg-purple-500' },
+    { label: 'Pending Approval', value: stats?.users.pendingDesigners ?? 0, icon: AlertCircle, color: 'bg-yellow-500' },
+    { label: 'Verified Designers', value: stats?.users.verifiedDesigners ?? 0, icon: CheckCircle, color: 'bg-indigo-500' },
+    { label: 'Total Projects', value: stats?.projects.total ?? 0, icon: Briefcase, color: 'bg-pink-500' },
+    { label: 'Open Projects', value: stats?.projects.open ?? 0, icon: Clock, color: 'bg-orange-500' },
+    { label: 'Completed Projects', value: stats?.projects.completed ?? 0, icon: CheckCircle, color: 'bg-teal-500' },
+  ];
 
   if (loading) {
-    return <p>Loading admin dashboard...</p>;
-  }
-
-  if (forbidden) {
-    return (
-      <div className="p-6">
-        <h1 className="text-xl font-bold mb-2">Access denied</h1>
-        <p className="mb-4">You are signed in, but you are not an admin.</p>
-        <SignOutButton />
-      </div>
-    );
+    return <div className="text-center py-12">Loading dashboard...</div>;
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1>
-      <pre className="bg-gray-100 p-4 rounded overflow-x-auto">
-        {JSON.stringify(stats, null, 2)}
-      </pre>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome back, Admin!</h1>
+        <p className="text-gray-600">Here's what's happening on HudumaLink today.</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {statCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.label} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className={`p-3 rounded-lg ${card.color} text-white`}>
+                  <Icon className="w-6 h-6" />
+                </div>
+                <span className="text-3xl font-bold text-gray-900">
+                  {card.value.toLocaleString()}
+                </span>
+              </div>
+              <p className="text-gray-600 font-medium">{card.label}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold mb-4">Designer Status Overview</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Pending Approval</span>
+              <span className="font-bold text-yellow-600">{stats?.users.pendingDesigners}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Approved</span>
+              <span className="font-bold text-green-600">{stats?.users.approvedDesigners}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Verified</span>
+              <span className="font-bold text-indigo-600">{stats?.users.verifiedDesigners}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Super Verified</span>
+              <span className="font-bold text-purple-600">{stats?.users.superVerifiedDesigners}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold mb-4">Project Status</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Open</span>
+              <span className="font-bold text-orange-600">{stats?.projects.open}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">In Progress</span>
+              <span className="font-bold text-blue-600">{stats?.projects.inProgress}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Completed</span>
+              <span className="font-bold text-teal-600">{stats?.projects.completed}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
