@@ -4,6 +4,8 @@ import { SignedIn, SignedOut, SignIn } from '@clerk/clerk-react';
 import AdminLayout from './pages/AdminLayout';
 import Dashboard from './pages/AdminDashboard';
 import PendingDesigners from './pages/PendingDesigner';
+import AllDesigners  from './pages/AllDesigners';
+import UsersPage from './pages/UserPage';
 
 function ProtectedAdminRoute() {
   return (
@@ -25,17 +27,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Sign In Page */}
         <Route path="/sign-in/*" element={<PublicSignIn />} />
-
-        {/* All Admin Routes */}
         <Route path="/admin/*" element={<ProtectedAdminRoute />}>
           <Route index element={<Dashboard />} />
           <Route path="pending-designers" element={<PendingDesigners />} />
-          {/* Add more here */}
+          <Route path="designers" element={<AllDesigners />} />
+          <Route path="users" element={<UsersPage />} />
         </Route>
-
-        {/* Root: Signed in → Dashboard, Signed out → Sign In */}
         <Route
           path="/"
           element={
@@ -50,7 +48,6 @@ export default function App() {
           }
         />
 
-        {/* Catch-all */}
         <Route
           path="*"
           element={
