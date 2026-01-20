@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
-import { Search, UserCheck, UserX, UserMinus, Shield, ShieldCheck, Loader2, AlertCircle, Filter } from 'lucide-react';
+import { apiRequest } from '@/api/axios';
+import {
+  Loader2,
+  AlertCircle,
+  UserCheck,
+  UserX,
+  UserMinus,
+  Shield,
+  ShieldCheck,
+  Search as SearchIcon, // ← Renamed to avoid conflict
+} from 'lucide-react';
 
 interface Designer {
   _id: string;
@@ -28,7 +38,7 @@ export default function AllDesigners() {
   const [designers, setDesigners] = useState<Designer[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState(''); // ← Renamed from 'search'
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [verifiedFilter, setVerifiedFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,28 +48,32 @@ export default function AllDesigners() {
     setLoading(true);
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) {
+        setLoading(false);
+        return;
+      }
 
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '15',
       });
-      if (search) params.append('search', search);
+      if (searchQuery.trim()) params.append('search', searchQuery.trim());
       if (statusFilter !== 'all') params.append('status', statusFilter);
       if (verifiedFilter !== 'all') params.append('verified', verifiedFilter);
 
-      const res = await fetch(`/api/admin/designers?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const res = await apiRequest('get', `/admin/designers?${params}`, token);
 
-      if (data.success) {
-        setDesigners(data.designers);
-        setPagination(data.pagination);
+      if (res.data.success) {
+        setDesigners(res.data.designers || []);
+        setPagination(res.data.pagination || null);
         setCurrentPage(page);
+      } else {
+        console.error('API error:', res.data.error);
+        setDesigners([]);
       }
     } catch (err) {
       console.error('Failed to fetch designers:', err);
+      setDesigners([]);
     } finally {
       setLoading(false);
     }
@@ -67,7 +81,15 @@ export default function AllDesigners() {
 
   useEffect(() => {
     fetchDesigners(1);
-  }, [search, statusFilter, verifiedFilter]);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchDesigners(1);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, statusFilter, verifiedFilter]);
 
   const handleAction = async (id: string, action: string, value?: boolean | string) => {
     setActionLoading(id);
@@ -75,29 +97,32 @@ export default function AllDesigners() {
       const token = await getToken();
       if (!token) return;
 
-      let endpoint = `/admin/designers/${id}/${action}`;
-      let body = {};
+      let endpoint = '';
+      let body: any = {};
 
-      if (action === 'suspend') {
-        endpoint = `/admin/designers/${id}/suspend`;
-        body = { suspended: value, reason: value ? 'Suspended by admin' : undefined };
-      } else if (action === 'verify') {
-        body = { verified: value };
-      } else if (action === 'super-verify') {
-        body = { superVerified: value };
-      } else if (action === 'reject') {
-        body = { reason: value || 'Rejected by admin' };
+      switch (action) {
+        case 'approve':
+          endpoint = `/admin/designers/${id}/approve`;
+          break;
+        case 'reject':
+          endpoint = `/admin/designers/${id}/reject`;
+          body = { reason: value || 'Rejected by admin' };
+          break;
+        case 'suspend':
+          endpoint = `/admin/designers/${id}/suspend`;
+          body = { suspended: value, reason: value ? 'Suspended by admin' : undefined };
+          break;
+        case 'verify':
+          endpoint = `/admin/designers/${id}/verify`;
+          body = { verified: value };
+          break;
+        case 'super-verify':
+          endpoint = `/admin/designers/${id}/super-verify`;
+          body = { superVerified: value };
+          break;
       }
 
-      await fetch(`/api${endpoint}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
+      await apiRequest('patch', endpoint, token, body);
       fetchDesigners(currentPage);
     } catch (err) {
       alert(`Failed to ${action} designer`);
@@ -114,15 +139,14 @@ export default function AllDesigners() {
       suspended: 'bg-gray-100 text-gray-800',
     };
     return (
-      <span className={`px-3 py-1 rounded-full text-sm font-medium ${styles[status] || styles.pending}`}>
+      <span
+        className={`px-3 py-1 rounded-full text-sm font-medium ${
+          styles[status] || 'bg-gray-100 text-gray-800'
+        }`}
+      >
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     );
-  };
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchDesigners(1);
   };
 
   return (
@@ -131,16 +155,16 @@ export default function AllDesigners() {
 
       {/* Filters */}
       <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-        <form onSubmit={handleSearch} className="relative max-w-md w-full">
+        <div className="relative max-w-md w-full">
           <input
             type="text"
             placeholder="Search by name or email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
-          <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-        </form>
+          <SearchIcon className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+        </div>
 
         <div className="flex flex-wrap gap-3">
           <select
@@ -178,6 +202,7 @@ export default function AllDesigners() {
           <div className="p-12 text-center">
             <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <p className="text-xl text-gray-600">No designers found</p>
+            <p className="text-gray-500 mt-2">Try adjusting your filters</p>
           </div>
         ) : (
           <>
@@ -235,15 +260,17 @@ export default function AllDesigners() {
                               <button
                                 onClick={() => handleAction(designer._id, 'approve')}
                                 disabled={actionLoading === designer._id}
-                                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
+                                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
                               >
+                                <UserCheck className="w-4 h-4" />
                                 Approve
                               </button>
                               <button
                                 onClick={() => handleAction(designer._id, 'reject', 'Incomplete profile')}
                                 disabled={actionLoading === designer._id}
-                                className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50"
+                                className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50 flex items-center gap-1"
                               >
+                                <UserX className="w-4 h-4" />
                                 Reject
                               </button>
                             </>
@@ -252,8 +279,9 @@ export default function AllDesigners() {
                             <button
                               onClick={() => handleAction(designer._id, 'suspend', true)}
                               disabled={actionLoading === designer._id}
-                              className="px-3 py-1.5 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 disabled:opacity-50"
+                              className="px-3 py-1.5 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 disabled:opacity-50 flex items-center gap-1"
                             >
+                              <UserMinus className="w-4 h-4" />
                               Suspend
                             </button>
                           )}
@@ -261,7 +289,7 @@ export default function AllDesigners() {
                             <button
                               onClick={() => handleAction(designer._id, 'suspend', false)}
                               disabled={actionLoading === designer._id}
-                              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+                              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
                             >
                               Unsuspend
                             </button>
@@ -270,8 +298,9 @@ export default function AllDesigners() {
                             <button
                               onClick={() => handleAction(designer._id, 'verify', true)}
                               disabled={actionLoading === designer._id}
-                              className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-50"
+                              className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1"
                             >
+                              <Shield className="w-4 h-4" />
                               Verify
                             </button>
                           )}
@@ -279,8 +308,9 @@ export default function AllDesigners() {
                             <button
                               onClick={() => handleAction(designer._id, 'super-verify', true)}
                               disabled={actionLoading === designer._id}
-                              className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50"
+                              className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50 flex items-center gap-1"
                             >
+                              <ShieldCheck className="w-4 h-4" />
                               Super Verify
                             </button>
                           )}
@@ -297,7 +327,8 @@ export default function AllDesigners() {
               <div className="px-6 py-4 border-t flex items-center justify-between bg-gray-50">
                 <p className="text-sm text-gray-600">
                   Showing {(currentPage - 1) * pagination.limit + 1} to{' '}
-                  {Math.min(currentPage * pagination.limit, pagination.total)} of {pagination.total} designers
+                  {Math.min(currentPage * pagination.limit, pagination.total)} of {pagination.total}{' '}
+                  designers
                 </p>
                 <div className="flex gap-2">
                   <button
