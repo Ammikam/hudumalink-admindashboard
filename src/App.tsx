@@ -6,6 +6,7 @@ import Dashboard from './pages/AdminDashboard';
 import PendingDesigners from './pages/PendingDesigner';
 import AllDesigners  from './pages/AllDesigners';
 import UsersPage from './pages/UserPage';
+import ProjectsPage from './pages/ProjectPage';
 
 function ProtectedAdminRoute() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="pending-designers" element={<PendingDesigners />} />
           <Route path="designers" element={<AllDesigners />} />
           <Route path="users" element={<UsersPage />} />
+          <Route path="projects" element={<ProjectsPage />} />
         </Route>
         <Route
           path="/"
