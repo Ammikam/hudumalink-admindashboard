@@ -52,10 +52,9 @@ export const adminApi = {
     await apiRequest('patch', ADMIN_ENDPOINTS.rejectDesigner(id), token, { reason });
   },
 
- suspendDesigner: async (id: string, suspended: boolean, reason?: string, token?: string) => {
-  if (!token) throw new Error('Authentication required');
-  await apiRequest('patch', ADMIN_ENDPOINTS.suspendDesigner(id), token, { suspended, reason });
-},
+  suspendDesigner: async (id: string, suspended: boolean, token: string, reason?: string) => {
+    await apiRequest('patch', ADMIN_ENDPOINTS.suspendDesigner(id), token, { suspended, reason });
+  },
 
   verifyDesigner: async (id: string, verified: boolean, token: string) => {
     await apiRequest('patch', ADMIN_ENDPOINTS.verifyDesigner(id), token, { verified });
@@ -65,10 +64,9 @@ export const adminApi = {
     await apiRequest('patch', ADMIN_ENDPOINTS.superVerifyDesigner(id), token, { superVerified });
   },
 
-banUser: async (id: string, banned: boolean, reason?: string, token?: string) => {
-  if (!token) throw new Error('Authentication required');
-  await apiRequest('patch', ADMIN_ENDPOINTS.banUser(id), token, { banned, reason });
-},
+  banUser: async (id: string, banned: boolean, token: string, reason?: string) => {
+    await apiRequest('patch', ADMIN_ENDPOINTS.banUser(id), token, { banned, reason });
+  },
 
   deleteProject: async (id: string, token: string) => {
     await apiRequest('delete', ADMIN_ENDPOINTS.deleteProject(id), token);

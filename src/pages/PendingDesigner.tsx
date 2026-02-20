@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { apiRequest } from '@/api/axios';
 import {
-  Search,
   UserCheck,
   UserX,
   Loader2,

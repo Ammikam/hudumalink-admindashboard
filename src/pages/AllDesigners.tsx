@@ -89,7 +89,7 @@ export default function AllDesigners() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, statusFilter, verifiedFilter]);
+  }, [searchQuery, statusFilter, verifiedFilter, getToken]);
 
   const handleAction = async (id: string, action: string, value?: boolean | string) => {
     setActionLoading(id);
@@ -225,7 +225,7 @@ export default function AllDesigners() {
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-gray-200 border-2 border-dashed border-gray-400 flex items-center justify-center">
                             <span className="text-xl font-bold text-gray-600">
-                              {designer.name.charAt(0).toUpperCase()}
+                              {designer.name?.charAt(0)?.toUpperCase() || '?'}
                             </span>
                           </div>
                           <p className="font-medium text-gray-900">{designer.name}</p>

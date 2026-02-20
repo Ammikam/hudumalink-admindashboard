@@ -1,4 +1,4 @@
-import { useAuth, SignedIn, useUser } from '@clerk/clerk-react';
+import { useAuth, SignedIn } from '@clerk/clerk-react';
 import { Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -14,7 +14,6 @@ import { adminApi } from '@/api/Admin'; // Make sure this path is correct
 
 export default function AdminLayout() {
   const { signOut, isLoaded, isSignedIn, getToken } = useAuth();
-  const { user } = useUser();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null); // null = checking
@@ -31,7 +30,6 @@ useEffect(() => {
   const checkAdminStatus = async () => {
     try {
       const token = await getToken();
-      console.log('Token for admin check:', token ? 'Got token' : 'No token'); // Debug
 
       if (!token) {
         setIsAdmin(false);
@@ -39,7 +37,6 @@ useEffect(() => {
       }
 
       const response = await adminApi.getStats(token);
-      console.log('Admin stats response:', response); // Should log real stats for admin
 
       if (response && response.success) {
         setIsAdmin(true);
@@ -48,8 +45,6 @@ useEffect(() => {
       }
     } catch (err: any) {
       console.error('Admin check error:', err);
-      console.error('Status:', err?.response?.status);
-      console.error('Data:', err?.response?.data);
 
       // Only treat 403 as "not admin" — other errors (network, 500) could be temporary
       if (err?.response?.status === 403) {
