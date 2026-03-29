@@ -1,15 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { apiRequest } from '@/api/axios';
-import { Search, Shield, Loader2, AlertCircle, Ban } from 'lucide-react';
-
-
-interface BackendResponse {
-  success: boolean;
-  users?: User[];
-  pagination?: Pagination;
-  error?: string;
-}
+import { Search, Shield, Loader2, AlertCircle, Ban, CheckCircle } from 'lucide-react';
 
 interface User {
   _id: string;
@@ -37,87 +29,86 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [banModal, setBanModal] = useState<{ id: string; banned: boolean; open: boolean }>({
-    id: '',
-    banned: false,
+  const [banModal, setBanModal] = useState<{ user: User | null; open: boolean }>({
+    user: null,
     open: false,
   });
   const [banReason, setBanReason] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  const fetchUsers = async (page = 1) => {
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const fetchUsers = useCallback(async (page = 1, searchTerm = search) => {
     setLoading(true);
     try {
       const token = await getToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+      if (!token) return;
 
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '15',
-      });
-      if (search.trim()) {
-        params.append('search', search.trim());
-      }
+      const params = new URLSearchParams({ page: page.toString(), limit: '15' });
+      if (searchTerm.trim()) params.append('search', searchTerm.trim());
 
-      const axiosResponse = await apiRequest('get', `/admin/users?${params}`, token);
-
-      const data: BackendResponse = axiosResponse.data;  
+      const res = await apiRequest('get', `/admin/users?${params}`, token);
+      const data = res.data;
 
       if (data.success && data.users) {
         setUsers(data.users);
         setPagination(data.pagination || null);
         setCurrentPage(page);
       } else {
-        console.error('API error:', data.error || 'Unknown error');
         setUsers([]);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to fetch users:', err);
       setUsers([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [getToken, search]);
 
+  // Initial load
   useEffect(() => {
     fetchUsers(1);
+  }, []);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => fetchUsers(1, search), 400);
+    return () => clearTimeout(timer);
   }, [search]);
 
   const handleBanToggle = async () => {
-    if (banModal.banned && !banReason.trim()) {
-      alert('Please provide a reason for banning');
+    const user = banModal.user;
+    if (!user) return;
+
+    const isBanning = !user.banned;
+    if (isBanning && !banReason.trim()) {
+      showToast('Please provide a reason for banning', 'error');
       return;
     }
 
-    setActionLoading(banModal.id);
+    setActionLoading(user._id);
     try {
       const token = await getToken();
       if (!token) return;
 
-      const axiosResponse = await apiRequest(
-        'patch',
-        `/admin/users/${banModal.id}/ban`,
-        token,
-        {
-          banned: banModal.banned,
-          reason: banModal.banned ? banReason : undefined,
-        }
-      );
+      const res = await apiRequest('patch', `/admin/users/${user._id}/ban`, token, {
+        banned: isBanning,
+        reason: isBanning ? banReason : undefined,
+      });
 
-      const data = axiosResponse.data as BackendResponse;
-
-      if (data.success) {
-        setBanModal({ id: '', banned: false, open: false });
+      if (res.data.success) {
+        showToast(isBanning ? `${user.name} has been banned` : `${user.name} has been unbanned`, 'success');
+        setBanModal({ user: null, open: false });
         setBanReason('');
         fetchUsers(currentPage);
       } else {
-        alert(data.error || 'Failed to update user status');
+        showToast(res.data.error || 'Action failed', 'error');
       }
     } catch (err) {
-      console.error('Ban request failed:', err);
-      alert('Failed to update user status');
+      showToast('Failed to update user status', 'error');
     } finally {
       setActionLoading(null);
     }
@@ -129,28 +120,33 @@ export default function UsersPage() {
       designer: 'bg-indigo-100 text-indigo-800',
       client: 'bg-gray-100 text-gray-800',
     };
-
     return roles.map((role) => (
-      <span
-        key={role}
-        className={`px-3 py-1 rounded-full text-xs font-medium ${badgeStyles[role] || badgeStyles.client}`}
-      >
+      <span key={role} className={`px-2 py-0.5 rounded-full text-xs font-medium ${badgeStyles[role] || badgeStyles.client}`}>
         {role.charAt(0).toUpperCase() + role.slice(1)}
       </span>
     ));
   };
 
-  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    fetchUsers(1);
-  };
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-3xl font-bold text-gray-900">Users Management</h1>
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg text-white transition-all ${
+          toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+        }`}>
+          {toast.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          {toast.message}
+        </div>
+      )}
 
-        <form onSubmit={handleSearch} className="relative max-w-md w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Users Management</h1>
+          {pagination && (
+            <p className="text-sm text-gray-500 mt-1">{pagination.total} total users</p>
+          )}
+        </div>
+        <div className="relative max-w-md w-full">
           <input
             type="text"
             placeholder="Search by name or email..."
@@ -159,10 +155,9 @@ export default function UsersPage() {
             className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-        </form>
+        </div>
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-12 text-center">
@@ -190,61 +185,56 @@ export default function UsersPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {users.map((user) => (
-                    <tr key={user._id} className="hover:bg-gray-50">
+                    <tr key={user._id} className={`hover:bg-gray-50 ${user.banned ? 'bg-red-50/40' : ''}`}>
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-full bg-gray-200 border-2 border-dashed border-gray-400 flex items-center justify-center">
-                            <span className="text-xl font-bold text-gray-600">
+                          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                            <span className="text-lg font-bold text-gray-600">
                               {user.name?.charAt(0)?.toUpperCase() || '?'}
                             </span>
                           </div>
                           <div>
                             <p className="font-medium text-gray-900">{user.name}</p>
                             {user.roles.includes('admin') && (
-                              <p className="text-xs text-purple-600 flex items-center gap-1 mt-1">
-                                <Shield className="w-4 h-4" /> Administrator
+                              <p className="text-xs text-purple-600 flex items-center gap-1 mt-0.5">
+                                <Shield className="w-3 h-3" /> Administrator
+                              </p>
+                            )}
+                            {user.banned && user.banReason && (
+                              <p className="text-xs text-red-500 mt-0.5 max-w-[160px] truncate" title={user.banReason}>
+                                Reason: {user.banReason}
                               </p>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-5 text-gray-600">{user.email}</td>
+                      <td className="px-6 py-5 text-gray-600 text-sm">{user.email}</td>
                       <td className="px-6 py-5">
-                        <div className="flex flex-wrap gap-2">
-                          {getRoleBadges(user.roles)}
-                        </div>
+                        <div className="flex flex-wrap gap-1">{getRoleBadges(user.roles)}</div>
                       </td>
                       <td className="px-6 py-5">
                         {user.banned ? (
-                          <span className="px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
-                            Banned
-                          </span>
+                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Banned</span>
                         ) : (
-                          <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                            Active
-                          </span>
+                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>
                         )}
                       </td>
-                      <td className="px-6 py-5 text-gray-600">
+                      <td className="px-6 py-5 text-gray-500 text-sm">
                         {new Date(user.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-5 text-center">
                         <button
-                          onClick={() =>
-                            setBanModal({
-                              id: user._id,
-                              banned: !user.banned,
-                              open: true,
-                            })
-                          }
+                          onClick={() => setBanModal({ user, open: true })}
                           disabled={actionLoading === user._id || user.roles.includes('admin')}
-                          className={`px-4 py-2 rounded-lg text-white flex items-center gap-2 mx-auto transition ${
-                            user.banned
-                              ? 'bg-green-600 hover:bg-green-700'
-                              : 'bg-red-600 hover:bg-red-700'
-                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          title={user.roles.includes('admin') ? 'Cannot ban an admin' : ''}
+                          className={`px-4 py-2 rounded-lg text-white text-sm flex items-center gap-2 mx-auto transition ${
+                            user.banned ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                          } disabled:opacity-40 disabled:cursor-not-allowed`}
                         >
-                          <Ban className="w-4 h-4" />
+                          {actionLoading === user._id
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : <Ban className="w-4 h-4" />
+                          }
                           {user.banned ? 'Unban' : 'Ban'}
                         </button>
                       </td>
@@ -254,26 +244,19 @@ export default function UsersPage() {
               </table>
             </div>
 
-            
             {pagination && pagination.pages > 1 && (
               <div className="px-6 py-4 border-t flex items-center justify-between bg-gray-50">
                 <p className="text-sm text-gray-600">
-                  Showing {(currentPage - 1) * pagination.limit + 1} to{' '}
-                  {Math.min(currentPage * pagination.limit, pagination.total)} of {pagination.total} users
+                  Showing {(currentPage - 1) * pagination.limit + 1}–
+                  {Math.min(currentPage * pagination.limit, pagination.total)} of {pagination.total}
                 </p>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => fetchUsers(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-4 py-2 border rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                  <button onClick={() => fetchUsers(currentPage - 1)} disabled={currentPage === 1}
+                    className="px-4 py-2 border rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                     Previous
                   </button>
-                  <button
-                    onClick={() => fetchUsers(currentPage + 1)}
-                    disabled={currentPage === pagination.pages}
-                    className="px-4 py-2 border rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                  <button onClick={() => fetchUsers(currentPage + 1)} disabled={currentPage === pagination.pages}
+                    className="px-4 py-2 border rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                     Next
                   </button>
                 </div>
@@ -283,47 +266,60 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Ban/Unban Modal */}
-      {banModal.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              {banModal.banned ? 'Ban User' : 'Unban User'}
-            </h2>
-            <p className="text-gray-600 mb-6">
-              {banModal.banned
-                ? 'This user will no longer be able to access the platform. Please provide a reason.'
-                : 'This will restore access to the platform.'}
+      {/* Ban / Unban Modal */}
+      {banModal.open && banModal.user && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                banModal.user.banned ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                <Ban className={`w-5 h-5 ${banModal.user.banned ? 'text-green-600' : 'text-red-600'}`} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {banModal.user.banned ? 'Unban' : 'Ban'} {banModal.user.name}
+                </h2>
+                <p className="text-sm text-gray-500">{banModal.user.email}</p>
+              </div>
+            </div>
+
+            <p className="text-gray-600 mb-5 text-sm">
+              {banModal.user.banned
+                ? 'This will restore full platform access for this user.'
+                : 'This user will immediately lose access to the platform.'}
             </p>
 
-            {banModal.banned && (
-              <textarea
-                value={banReason}
-                onChange={(e) => setBanReason(e.target.value)}
-                placeholder="Reason for banning (required)"
-                className="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 mb-6 h-32 resize-none"
-              />
+            {!banModal.user.banned && (
+              <div className="mb-5">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for ban <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={banReason}
+                  onChange={(e) => setBanReason(e.target.value)}
+                  placeholder="Explain why this user is being banned..."
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 h-28 resize-none text-sm"
+                />
+              </div>
             )}
 
             <div className="flex gap-3 justify-end">
               <button
-                onClick={() => {
-                  setBanModal({ id: '', banned: false, open: false });
-                  setBanReason('');
-                }}
-                className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+                onClick={() => { setBanModal({ user: null, open: false }); setBanReason(''); }}
+                className="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={handleBanToggle}
-                disabled={actionLoading === banModal.id}
-                className={`px-6 py-3 rounded-lg text-white flex items-center gap-2 ${
-                  banModal.banned ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+                disabled={actionLoading === banModal.user._id}
+                className={`px-5 py-2.5 rounded-lg text-white text-sm font-medium flex items-center gap-2 ${
+                  banModal.user.banned ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
                 } disabled:opacity-50`}
               >
-                {actionLoading === banModal.id && <Loader2 className="w-4 h-4 animate-spin" />}
-                Confirm {banModal.banned ? 'Ban' : 'Unban'}
+                {actionLoading === banModal.user._id && <Loader2 className="w-4 h-4 animate-spin" />}
+                Confirm {banModal.user.banned ? 'Unban' : 'Ban'}
               </button>
             </div>
           </div>

@@ -7,67 +7,51 @@ import {
   UserCheck, 
   LogOut,
   Menu,
-  X
+  X,
+  DollarSign,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { adminApi } from '@/api/Admin'; // Make sure this path is correct
+import { adminApi } from '@/api/Admin';
 
 export default function AdminLayout() {
   const { signOut, isLoaded, isSignedIn, getToken } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null); // null = checking
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
-  // Check if user is admin by trying a protected API call
-useEffect(() => {
-  if (!isLoaded) return;
+  useEffect(() => {
+    if (!isLoaded) return;
 
-  if (!isSignedIn) {
-    setIsAdmin(false);
-    return;
-  }
-
-  const checkAdminStatus = async () => {
-    try {
-      const token = await getToken();
-
-      if (!token) {
-        setIsAdmin(false);
-        return;
-      }
-
-      const response = await adminApi.getStats(token);
-
-      if (response && response.success) {
-        setIsAdmin(true);
-      } else {
-        setIsAdmin(false);
-      }
-    } catch (err: any) {
-      console.error('Admin check error:', err);
-
-      // Only treat 403 as "not admin" — other errors (network, 500) could be temporary
-      if (err?.response?.status === 403) {
-        setIsAdmin(false);
-      } else {
-        // Temporary error — don't lock out, retry or show loading
-        setIsAdmin(false); // Safe default
-      }
+    if (!isSignedIn) {
+      setIsAdmin(false);
+      return;
     }
-  };
 
-  checkAdminStatus();
-}, [isLoaded, isSignedIn, getToken]);
+    const checkAdminStatus = async () => {
+      try {
+        const token = await getToken();
+        if (!token) { setIsAdmin(false); return; }
+
+        const response = await adminApi.getStats(token);
+        setIsAdmin(!!(response && response.success));
+      } catch (err: any) {
+        console.error('Admin check error:', err);
+        setIsAdmin(false);
+      }
+    };
+
+    checkAdminStatus();
+  }, [isLoaded, isSignedIn, getToken]);
 
   const menuItems = [
-    { path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/admin/pending-designers', label: 'Pending Designers', icon: UserCheck },
-    { path: '/admin/designers', label: 'All Designers', icon: Users },
-    { path: '/admin/users', label: 'Users', icon: Users },
-    { path: '/admin/projects', label: 'Projects', icon: Briefcase },
+    { path: '/admin',                   label: 'Dashboard',        icon: LayoutDashboard },
+    { path: '/admin/pending-designers', label: 'Pending Designers', icon: UserCheck       },
+    { path: '/admin/designers',         label: 'All Designers',     icon: Users           },
+    { path: '/admin/users',             label: 'Users',             icon: Users           },
+    { path: '/admin/projects',          label: 'Projects',          icon: Briefcase       },
+    { path: '/admin/transactions',      label: 'Transactions',      icon: DollarSign      },
   ];
 
-  // Loading or checking admin status
   if (!isLoaded || isAdmin === null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -76,12 +60,8 @@ useEffect(() => {
     );
   }
 
-  // Not signed in → redirect to sign-in
-  if (!isSignedIn) {
-    return <Navigate to="/sign-in" replace />;
-  }
+  if (!isSignedIn) return <Navigate to="/sign-in" replace />;
 
-  // Not admin → show access denied
   if (!isAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -101,13 +81,12 @@ useEffect(() => {
     );
   }
 
-  // === ADMIN CONFIRMED → Show full layout (your original code unchanged) ===
   return (
     <SignedIn>
       <div className="min-h-screen bg-gray-50 flex">
-        {/* Mobile Sidebar Overlay */}
+        {/* Mobile overlay */}
         {sidebarOpen && (
-          <div 
+          <div
             className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
@@ -119,31 +98,32 @@ useEffect(() => {
         }`}>
           <div className="h-full flex flex-col">
             <div className="h-16 flex items-center justify-between px-6 border-b">
-              <h1 className="text-2xl font-bold text-indigo-600">HudumaLink Admin</h1>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="lg:hidden"
-              >
+              <h1 className="text-xl font-bold text-indigo-600">HudumaLink Admin</h1>
+              <button onClick={() => setSidebarOpen(false)} className="lg:hidden">
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            <nav className="flex-1 px-4 py-6">
+            <nav className="flex-1 px-4 py-6 overflow-y-auto">
               {menuItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path;
+                // Exact match for dashboard, startsWith for the rest
+                const isActive = item.path === '/admin'
+                  ? location.pathname === '/admin'
+                  : location.pathname.startsWith(item.path);
+
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-colors ${
+                    onClick={() => setSidebarOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${
                       isActive
                         ? 'bg-indigo-100 text-indigo-700 font-medium'
                         : 'text-gray-700 hover:bg-gray-100'
                     }`}
-                    onClick={() => setSidebarOpen(false)}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-5 h-5 flex-shrink-0" />
                     {item.label}
                   </Link>
                 );
@@ -162,19 +142,20 @@ useEffect(() => {
           </div>
         </aside>
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col">
-          <header className="h-16 bg-white shadow-sm border-b flex items-center justify-between px-6">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden"
-            >
+        {/* Main content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <header className="h-16 bg-white shadow-sm border-b flex items-center justify-between px-6 flex-shrink-0">
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden">
               <Menu className="w-6 h-6" />
             </button>
             <h2 className="text-xl font-semibold text-gray-800">
-              {menuItems.find(item => item.path === location.pathname)?.label || 'Admin Panel'}
+              {menuItems.find(item =>
+                item.path === '/admin'
+                  ? location.pathname === '/admin'
+                  : location.pathname.startsWith(item.path)
+              )?.label || 'Admin Panel'}
             </h2>
-            <div className="w-10" /> {/* Spacer */}
+            <div className="w-10" />
           </header>
 
           <main className="flex-1 p-6 overflow-y-auto">
