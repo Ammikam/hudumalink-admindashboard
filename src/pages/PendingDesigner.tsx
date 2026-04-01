@@ -3,10 +3,9 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { apiRequest } from '@/api/axios';
 import {
-  UserCheck, UserX, Loader2, Eye, X, AlertTriangle,
-  User, Award, CheckCircle, Mail, Phone, MapPin,
-  Briefcase, IdCard, ExternalLink, ArrowRight, AlertCircle,
-  Clock, Instagram, Globe, Link2, DollarSign, Timer,
+  UserCheck, UserX, Loader2, Eye, X, CheckCircle, Mail, Phone, MapPin,
+  Briefcase, IdCard, ExternalLink,  AlertCircle,
+  Clock, Globe,  DollarSign, Timer,
   ChevronRight, Shield, FileText, Users, Star
 } from 'lucide-react';
 
