@@ -11,7 +11,7 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { adminApi } from '@/api/Admin';
+
 
 export default function AdminLayout() {
   const { signOut, isLoaded, isSignedIn, getToken } = useAuth();
@@ -27,18 +27,22 @@ export default function AdminLayout() {
       return;
     }
 
-    const checkAdminStatus = async () => {
-      try {
-        const token = await getToken();
-        if (!token) { setIsAdmin(false); return; }
+const checkAdminStatus = async () => {
+  try {
+    const token = await getToken();
+    if (!token) { setIsAdmin(false); return; }
 
-        const response = await adminApi.getStats(token);
-        setIsAdmin(!!(response && response.success));
-      } catch (err: any) {
-        console.error('Admin check error:', err);
-        setIsAdmin(false);
-      }
-    };
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+
+    setIsAdmin(!!(data.success && data.user?.roles?.includes('admin')));
+  } catch (err) {
+    console.error('Admin check error:', err);
+    setIsAdmin(false);
+  }
+};
 
     checkAdminStatus();
   }, [isLoaded, isSignedIn, getToken]);
