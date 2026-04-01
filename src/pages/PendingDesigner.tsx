@@ -670,16 +670,3 @@ export default function PendingDesigners() {
   );
 }
 
-function PanelSection({ title, icon, children }: {
-  title: string; icon?: React.ReactNode; children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-        {icon && <span>{icon}</span>}
-        {title}
-      </p>
-      {children}
-    </div>
-  );
-}
