@@ -50,7 +50,7 @@ export default function Dashboard() {
 
         const [statsData, paymentsRes] = await Promise.all([
           adminApi.getStats(token),
-          fetch(`http://localhost:5000/api/admin/payments?limit=1`, {
+          fetch(`${import.meta.env.VITE_API_URL}/admin/payments?limit=1`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
